@@ -51,7 +51,7 @@ const authentication = (request, response, next) => {
     jwt.verify(jwtToken, "SECRET_KEY", (error, payload) => {
       if (error) {
         response.status(401);
-        response.send("Invalid Jwt Token");
+        response.send("Invalid JWT Token");
       } else {
         request.username = payload.username;
         request.userId = payload.userId;
@@ -75,7 +75,7 @@ const tweetAccessVerification = async (request, response, next) => {
   const tweet = db.get(getTweetQuery);
   if (tweet === undefined) {
     response.status(401);
-    response.send("Invalid Tweet");
+    response.send("Invalid Request");
   } else {
     next();
   }
@@ -98,7 +98,7 @@ app.post("/register/", async (request, response) => {
       const createUserQuery = `insert into user(username,password,name,gender)
             values('${username}','${hashedPassword}','${name}','${gender}')`;
       await db.run(createUserQuery);
-      response.send("User Created Successfully");
+      response.send("User created successfully");
     }
   }
 });
@@ -121,11 +121,11 @@ app.post("/login/", async (request, response) => {
       response.send({ jwtToken });
     } else {
       response.status(400);
-      response.send("Invalid Password");
+      response.send("Invalid password");
     }
   } else {
     response.status(400);
-    response.send("Invalid User");
+    response.send("Invalid user");
   }
 });
 
@@ -164,32 +164,43 @@ app.get("/user/followers/", authentication, async (request, response) => {
 });
 
 //API-6
-app.get("/tweets/:tweetId/", authentication, async (request, response) => {
-  const { username, userId } = request;
-  const { tweetId } = request.params;
-  const getTweetQuery = `select tweet,
+app.get(
+  "/tweets/:tweetId/",
+  authentication,
+  tweetAccessVerification,
+  async (request, response) => {
+    const { username, userId } = request;
+    const { tweetId } = request.params;
+    const getTweetQuery = `select tweet,
     (select count() from like where tweet_id='${tweetId}') as likes,
     (select count() from reply where tweet_id='${tweetId}') as replies,
-    data_time as dateTime,
+    date_time as dateTime,
     from tweet where tweet.tweet_id='${tweetId}';`;
-  const tweet = await db.get(getTweetQuery);
-  response.send(tweet);
-});
+    const tweet = await db.get(getTweetQuery);
+    response.send(tweet);
+  }
+);
 
 //API-7
-app.get("/tweets/:tweetId/likes", authentication, async (Request, response) => {
-  const { tweetId } = request.params;
-  const getLikesQuery = `select username from user inner join like on user.user_id=like.user_id
+app.get(
+  "/tweets/:tweetId/likes",
+  authentication,
+  tweetAccessVerification,
+  async (request, response) => {
+    const { tweetId } = request.params;
+    const getLikesQuery = `select username from user inner join like on user.user_id=like.user_id
     where tweet_id='${tweetId}';`;
-  const likedUsers = await db.all(getLikesQuery);
-  const usersArray = likedUsers.map((each) => each.username);
-  response.send({ likes: usersArray });
-});
+    const likedUsers = await db.all(getLikesQuery);
+    const usersArray = likedUsers.map((each) => each.username);
+    response.send({ likes: usersArray });
+  }
+);
 
 //API-8
 app.get(
   "/tweets/:tweetId/replies/",
   authentication,
+  tweetAccessVerification,
   async (request, response) => {
     const { tweetId } = request.params;
     const getRepliesQuery = `select name,reply
@@ -205,11 +216,11 @@ app.get("/user/tweets/", authentication, async (request, response) => {
   const getTweetsQuery = `select tweet,
     count(distinct like_id) as likes,
     count(distinct reply_id) as replies,
-    date_time as dataTime from
+    date_time as dateTime from
     tweet left join reply on tweet.tweet_id=reply.tweet_id
     left join like on tweet.tweet_id=like.tweet_id
     where tweet.user_id=${userId}
-    group by tweet.tweet_id`;
+    group by tweet.tweet_id;`;
   const tweets = await db.all(getTweetsQuery);
   response.send(tweets);
 });
@@ -241,3 +252,5 @@ app.delete("/tweets/:tweetId/", authentication, async (request, response) => {
     response.send("Tweet Removed");
   }
 });
+
+module.exports = app;
